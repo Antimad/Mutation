@@ -58,16 +58,30 @@ seq = np.array(sequence_size_matrix[0][2])
 Size = np.array(sequence_size_matrix[1][2])
 Covariance = covariance_builder(generation=seq, size=Size)
 
-Xi = np.empty(shape=[0, 50])
 for idx, sequence in enumerate(sequence_size_matrix[0]):
+    """
+    The main loop handles time, as each sequence is a point(generation) in time. 
+    einsum is used to handle the summations of indices i & j.
+    """
+    """
+    The equation has indices i & j, for sites i & j.
+    Since I'll be using einsum for the summations of i & j, I will reference 
+    """
     # delta_x_i - Summation(C_ik * S_k)
-    # TODO: delta_X_i =
+    delta_X_i = sequence[-1][idx] - sequence[0][idx]
     Covariance = covariance_builder(generation=np.array(sequence), size=np.array(sequence_size_matrix[1][idx]))
     Sum_C_ik = np.eimsum('ik->k', Covariance)
     Sum_C_ik_S = Sum_C_ik * sample_properties["Beneficial_Deleterious Fitness"]
     # end
 
     # C_ij^(-1)(1-2X_j)
+    inverse_Covariance = np.linalg.inv(Covariance)  # TODO: Fix, inverse D.N.E.
 
-    # Xi = np.append(Xi, np.matrix(X_i_einsum), axis=0)
+    # It's odd that they are the same, doubt...
+    x_j = np.einsum('ij->j', sequence)[idx]
+    x_i = np.einsum('ij->j', sequence)[idx]
+
+    one_minus_2xj = (1 - (2 * x_j))
+    one_minus_2xi = (1 - (2 * x_i))
+
 
