@@ -35,23 +35,23 @@ def covariance_builder(generation: np.array, size: np.array):
     covariance_matrix = np.zeros((50, 50))
     generation_with_size = (generation.T * size).T
     generation_with_size = sum(generation_with_size)
+    generation_with_size = generation_with_size / sample_properties['pop_size']
     covariance = []
-
     for i_idx, x_i_sum in enumerate(generation_with_size):
         covariance_list = []
         for j_idx, x_j_sum in enumerate(generation_with_size):
             if i_idx == j_idx:
-                covariance_diagonal = (x_i_sum * (1 - x_i_sum)) / sample_properties["pop_size"]
+                covariance_diagonal = (x_i_sum * (1 - x_i_sum))
                 covariance_list.append(covariance_diagonal)
             else:
                 x_ij = calc_xij(generation, i=i_idx, j=j_idx)
-                off_diagonal_covariance = (x_ij - (x_i_sum * x_j_sum)) / sample_properties["pop_size"]
+                off_diagonal_covariance = (x_ij - (x_i_sum * x_j_sum))  # / sample_properties["pop_size"]
                 covariance_list.append(off_diagonal_covariance)
         covariance.append(np.array(covariance_list))
     covariance = np.array(covariance)
     covariance_matrix += covariance
 
-    return covariance
+    return covariance_matrix
 
 
 seq = np.array(sequence_size_matrix[0][2])
@@ -67,15 +67,17 @@ for idx, sequence in enumerate(sequence_size_matrix[0]):
     The equation has indices i & j, for sites i & j.
     Since I'll be using einsum for the summations of i & j, I will reference 
     """
+
     # delta_x_i - Summation(C_ik * S_k)
     delta_X_i = sequence[-1][idx] - sequence[0][idx]
     Covariance = covariance_builder(generation=np.array(sequence), size=np.array(sequence_size_matrix[1][idx]))
-    Sum_C_ik = np.eimsum('ik->k', Covariance)
+    Sum_C_ik = np.einsum('ik->k', Covariance)
     Sum_C_ik_S = Sum_C_ik * sample_properties["Beneficial_Deleterious Fitness"]
+    Covariance[np.diag_indices_from(Covariance)] += 1
     # end
 
     # C_ij^(-1)(1-2X_j)
-    inverse_Covariance = np.linalg.inv(Covariance)  # TODO: Fix, inverse D.N.E.
+    inverse_Covariance = np.linalg.inv(Covariance)
 
     # It's odd that they are the same, doubt...
     x_j = np.einsum('ij->j', sequence)[idx]
