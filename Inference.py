@@ -15,6 +15,14 @@ sample_properties = {
     "Beneficial_Deleterious Mutation": 10,
     "Beneficial_Deleterious Fitness": 0.03
 }
+N = 1000
+
+
+def sum_mutant_allele_sites(generation: np.array, size: np.array, empty_array: np.array):
+    result = empty_array
+    for i, seq in enumerate(generation):
+        result += seq * size[i]
+    return result
 
 
 def calc_xij(generation, i, j):
@@ -27,30 +35,30 @@ def calc_xij(generation, i, j):
         if total > 1:
             x_ij_count += 1
 
-    return x_ij_count
+    return x_ij_count / N
 
 
-def covariance_builder(generation: np.array, size: np.array):
-    covariance_matrix = np.zeros((50, 50))
-    generation_with_size = (generation.T * size).T
-    generation_with_size = sum(generation_with_size)
-    generation_with_size = generation_with_size / sample_properties['pop_size']
+def covariance_builder(generation: np.array, size: np.array, dim: int):
+    temp_cov = np.zeros((dim, dim))
+    generation_with_size = sum_mutant_allele_sites(generation=generation, size=size, empty_array=np.zeros(dim))
     covariance = []
     for i_idx, x_i_sum in enumerate(generation_with_size):
         covariance_list = []
         for j_idx, x_j_sum in enumerate(generation_with_size):
+            x_i_freq = x_i_sum / N
+            x_j_freq = x_j_sum / N
             if i_idx == j_idx:
-                covariance_diagonal = (x_i_sum * (1 - x_i_sum))
+                covariance_diagonal = (x_i_freq * (1 - x_i_freq))
                 covariance_list.append(covariance_diagonal)
             else:
                 x_ij = calc_xij(generation, i=i_idx, j=j_idx)
-                off_diagonal_covariance = (x_ij - (x_i_sum * x_j_sum))  # / sample_properties["pop_size"]
+                off_diagonal_covariance = (x_ij - (x_i_freq * x_j_freq))
                 covariance_list.append(off_diagonal_covariance)
         covariance.append(np.array(covariance_list))
     covariance = np.array(covariance)
-    covariance_matrix += covariance
+    temp_cov += covariance
 
-    return covariance_matrix
+    return temp_cov
 
 
 def main(gen_data):
@@ -92,7 +100,7 @@ def main(gen_data):
 
 results = []
 index = 0
-
+"""
 for root, dirs, files in os.walk("Data", topdown=False):
     for file in files:
         index += 1
@@ -107,3 +115,4 @@ plt.ylabel("Mutation Rates")
 plt.title("Mutation Rate Distribution")
 
 plt.savefig("Mutation Distribution")
+"""
