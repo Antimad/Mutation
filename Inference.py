@@ -1,19 +1,13 @@
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import os
 
-file = r"C:\Users\unwae\PycharmProjects\UCR_W21-Wright_Fisher_Model\Sample.json"
-
-sample = pd.read_json(file)
+# file = r"Data\#1--b_0.05_10-d_0.05_10-m_1e-3-p_1000.npz"
 
 sample_properties = {
     "pop_size": 1000,
-    "S_Length": 50,
-    "Generations": 1000,
-    "Mutation Rate": 0.001,
-    "Beneficial_Deleterious Mutation": 10,
-    "Beneficial_Deleterious Fitness": 0.03
+    "S_Length": 30,
+    "Generations": 500,
+    "Mutation Rate": 1e-3,
+    "Selection": [0.05] * 10 + [0] * 10 + [-0.05] * 10
 }
 N = 1000
 
@@ -25,15 +19,15 @@ def sum_mutant_allele_sites(generation: np.array, size: np.array, empty_array: n
     return result
 
 
-def calc_xij(generation, i, j):
+def calc_xij(generation, i, j, sz):
     ith_column = generation[:, i]
     jth_column = generation[:, j]
 
     column_sum = ith_column + jth_column
     x_ij_count = 0
-    for total in column_sum:
+    for idx, total in enumerate(column_sum):
         if total > 1:
-            x_ij_count += 1
+            x_ij_count += sz[idx]
 
     return x_ij_count / N
 
@@ -51,7 +45,7 @@ def covariance_builder(generation: np.array, size: np.array, dim: int):
                 covariance_diagonal = (x_i_freq * (1 - x_i_freq))
                 covariance_list.append(covariance_diagonal)
             else:
-                x_ij = calc_xij(generation, i=i_idx, j=j_idx)
+                x_ij = calc_xij(generation, i=i_idx, j=j_idx, sz=size)
                 off_diagonal_covariance = (x_ij - (x_i_freq * x_j_freq))
                 covariance_list.append(off_diagonal_covariance)
         covariance.append(np.array(covariance_list))
@@ -61,58 +55,38 @@ def covariance_builder(generation: np.array, size: np.array, dim: int):
     return temp_cov
 
 
-def main(gen_data):
-    mu = 0
-    regularization = 1 / (sample_properties["pop_size"])
+def main(file_data):
+    gen_data = np.load(file_data, allow_pickle=True)
+    top = bottom = 0
+    seq_l = sample_properties["S_Length"]
+    regularization = np.identity(seq_l)/seq_l
+    x_0 = sum_mutant_allele_sites(generation=gen_data["Sequence"][0],
+                                  size=gen_data["Size"][0], empty_array=np.zeros(seq_l))
     for time, sequences in enumerate(gen_data["Sequence"]):
-        """
-        The main loop handles time, as each sequence is a point(generation) in time. 
-        einsum is used to handle the summations of indices i & j.
-        """
-        """
-        The equation has indices i & j, for sites i & j.
-        Since I'll be using einsum for the summations of i & j, I will reference 
-        """
-        covariance = covariance_builder(generation=np.array(sequences), size=np.array(gen_data["Size"][time]))
-        sum_c_ik = np.einsum('ik->k', covariance)
-        sum_c_ik_s = sum_c_ik * sample_properties["Beneficial_Deleterious Fitness"]
-        covariance[np.diag_indices_from(covariance)] += regularization  # Regularization
-        inverse_covariance = np.linalg.inv(covariance)
-        top = bottom = 0
-        for idx, sequence in enumerate(sequences):
-            """
-            This loop handle the iteration of each sequence in the generation (time) loop above.
-            """
-            delta_x_i = sequence[0] - sequence[-1]  # Should this be the other way around?
-            delta_xi_minus_sum_cs = delta_x_i - sum_c_ik_s
+        size = gen_data["Size"][time]
+        if time == 0:
+            x_n = sum_mutant_allele_sites(generation=gen_data["Sequence"][time],
+                                          size=size, empty_array=np.zeros(seq_l))
+            delta_x_i = x_n/N - x_0 / N
+        else:
+            x_n_minus_1 = sum_mutant_allele_sites(generation=gen_data["Sequence"][time - 1],
+                                                  size=gen_data["Size"][time - 1], empty_array=np.zeros(seq_l))
+            x_n = sum_mutant_allele_sites(generation=gen_data["Sequence"][time],
+                                          size=size, empty_array=np.zeros(seq_l))
+            delta_x_i = x_n/N - x_n_minus_1/N
+        covariance_matrix = covariance_builder(generation=sequences, size=size,
+                                               dim=seq_l) + regularization
+        c_ij_s_k = covariance_matrix.dot(sample_properties["Selection"])
+        top_left = delta_x_i - c_ij_s_k
+        inverted_covariance = np.linalg.inv(covariance_matrix)
+        x_j = x_n/N
+        top_right = inverted_covariance.dot(1 - (2 * x_j))
 
-            for index_i, site_i in enumerate(sequence):
-                one_minus_2xi = (1 - (2 * site_i))
+        top += top_left.dot(top_right)
 
-                for index_j, site_j in enumerate(sequence):
-                    one_minus_2xj = (1 - (2 * site_j))
-                    inv_c_times_1_2_x_j = (inverse_covariance[index_i][index_j] * one_minus_2xj)
-                    top += (delta_xi_minus_sum_cs[index_i] * inv_c_times_1_2_x_j)
-                    bottom += (one_minus_2xi * inv_c_times_1_2_x_j)
-        mu = top/bottom
+        # bottom
+        x_i = x_n/N
+        bottom += (inverted_covariance.dot(1 - (2 * x_i))).dot((1 - (2 * x_j)))
+
+    mu = top/bottom
     return mu
-
-
-results = []
-index = 0
-"""
-for root, dirs, files in os.walk("Data", topdown=False):
-    for file in files:
-        index += 1
-        data = np.load(os.path.join(root, file), allow_pickle=True)
-        result = main(gen_data=data)
-        results.append(result)
-        print("Result: {0}, index: {0}".format(result, index))
-
-
-plt.hist(x=results)
-plt.ylabel("Mutation Rates")
-plt.title("Mutation Rate Distribution")
-
-plt.savefig("Mutation Distribution")
-"""
