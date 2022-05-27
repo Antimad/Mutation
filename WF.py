@@ -1,7 +1,6 @@
-# A simple Wright-Fisher simulation with an additive fitness model
-
 import sys
 import argparse
+import os
 import numpy as np  # numerical tools
 from timeit import default_timer as timer  # timer for performance
 
@@ -13,26 +12,40 @@ def usage():
     print("")
 
 
-def main(file_name):
+def main(params):
     """ Simulate Wright-Fisher evolution of a population and save the results. """
 
     # Read in simulation parameters from command line
+    file_name = params["File Name"]
+    generations = params["Generations"]
+    selection = params["Selection"]
+    no_selection = params["# of Selection"]
+    seq_length = params["Sequence Length"]
+    mutation_rate = params["Mutation Rate"]
 
     parser = argparse.ArgumentParser(description='Wright-Fisher evolutionary simulation.')
-    parser.add_argument('-o', type=str, default='P1000_G400_S5_b20.05_d10.05_M1e-3', help='output destination')
+    parser.add_argument('-o', type=str, default='presentation/S_30/sb_0.05_10 - sd_0.05_10 - m_1e-2 - p_1000',
+                        help='output destination')
     parser.add_argument('-N', type=int, default=1000, help='population size')
-    parser.add_argument('-L', type=int, default=5, help='sequence length')
-    parser.add_argument('-T', type=int, default=400, help='number of generations in simulation')
-    parser.add_argument('--mu', type=float, default=1.0e-3, help='mutation rate')
-    parser.add_argument('--nB', type=int, default=10, help='number of beneficial mutations')
-    parser.add_argument('--fB', type=float, default=0.03, help='fitness effect of beneficial mutations')
-    parser.add_argument('--nD', type=int, default=10, help='number of deleterious mutations')
-    parser.add_argument('--fD', type=float, default=-0.03, help='fitness effect of deleterious mutations')
+    parser.add_argument('-L', type=int, default=seq_length, help='sequence length')
+    parser.add_argument('-T', type=int, default=generations, help='number of generations in simulation')
+    parser.add_argument('--mu', type=float, default=mutation_rate, help='mutation rate')
+    parser.add_argument('--nB', type=int, default=no_selection, help='number of beneficial mutations')
+    parser.add_argument('--fB', type=float, default=selection, help='fitness effect of beneficial mutations')
+    parser.add_argument('--nD', type=int, default=no_selection, help='number of deleterious mutations')
+    parser.add_argument('--fD', type=float, default=-selection, help='fitness effect of deleterious mutations')
     parser.add_argument('--random', type=int, default=0, help='number of random starting sequences in the population')
 
     arg_list = parser.parse_args(sys.argv[1:])
 
-    out_str = file_name
+    out_str = "#{0}--G{1}_L{2}_s_{3}_s#{4}-m_{5}-p_1000".format(file_name, generations, seq_length, selection,
+                                                                no_selection, mutation_rate)
+    folder = "More Data/G{0}_L{1}_M_{2}_s_{3}_s#{4}".format(generations, seq_length, mutation_rate, selection,
+                                                                  no_selection)
+    try:
+        os.makedirs(folder)
+    except FileExistsError:
+        pass
     N = arg_list.N
     L = arg_list.L
     T = arg_list.T
@@ -60,7 +73,7 @@ def main(file_name):
             self.n = n  # number of members
 
             if 'sequence' in kwargs:
-                self.sequence = np.array(kwargs['sequence'])  # sequence identifier
+                self.sequence = np.array(kwargs['sequence'])  # sequence identifider
                 self.f = 1. + np.sum(h * self.sequence)  # initialize fitness based on sequence using h vector
 
             else:
@@ -139,7 +152,6 @@ def main(file_name):
         r = np.array([s.n * s.f for s in pop])
         p = r / np.sum(r)  # probability of selection for each species (sequence)
         n = np.random.multinomial(N, pvals=p)  # selected number of each species
-        # print(n)
 
         # Update population size and mutate
 
@@ -167,20 +179,19 @@ def main(file_name):
 
     # End and output total time
 
-    f = open("Data/Gen_{0}".format(out_str) + '.npz', 'wb')
+    f = open("{0}/{1}".format(folder, out_str) + '.npz', 'wb')
     np.savez_compressed(f, Size=nVec, Sequence=sVec)
     f.close()
 
-    # f = open('examples/figx2-N_1e3-mu_1e-3.dat', 'w')
-    # for i in range(len(nVec)):
-    #    for j in range(len(nVec[i])):
-    #        f.write('%d\t%d\t%s\n' % (i*record, nVec[i][j], ' '.join([str(int(k)) for k in sVec[i][j]])))
-    # f.close()
-
+    """
+    f = open(("{0}/Dat_file/{1}".format(folder, out_str) + ".dat"), 'w')
+    for i in range(len(nVec)):
+        for j in range(len(nVec[i])):
+            f.write('%d\t%d\t%s\n' % (i*record, nVec[i][j], ' '.join([str(int(k)) for k in sVec[i][j]])))
+    f.close()
+    """
     end = timer()
     print('\nTotal time: %lfs, average per generation %lfs' % ((end - start), (end - start) / float(tEnd)))
-    for amt in range(len(nVec)):
-        print(nVec[amt].sum())
 
 
 def printUpdate(current, end, bar_length=20):
@@ -193,5 +204,4 @@ def printUpdate(current, end, bar_length=20):
     sys.stdout.flush()
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == '__main__': main()
